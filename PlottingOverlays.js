@@ -22,11 +22,25 @@ if (Platform.OS !== "web") {
 }
 
 const INITIAL_REGION = {
-  latitude: 43.65,
-  longitude: -79.38,
+  latitude: 37.965,
+  longitude: -87.406,
   latitudeDelta: 0.05,
   longitudeDelta: 0.05,
 };
+
+function getBrowserPosition() {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      reject(new Error("navigator.geolocation not available"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      (err) => reject(err),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+}
 
 const RESTAURANT_TEMPLATES = [
   {
@@ -129,38 +143,33 @@ export default function PlottingOverlays() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadCurrentLocation() {
+    async function resolveUserLocation() {
+      // 1. Try expo-location (native iOS/Android)
       try {
         const locationModule = require("expo-location");
         const permission = await locationModule.requestForegroundPermissionsAsync();
-
-        if (!isMounted) {
-          return;
-        }
-
-        if (permission.status !== "granted") {
-          setLocationState({
-            status: "error",
-            message: "Location permission was denied. Enable it to find the nearest restaurant.",
-            userLocation: null,
-            restaurants: [],
-            nearestRestaurant: null,
+        if (permission.status === "granted") {
+          const fix = await locationModule.getCurrentPositionAsync({
+            accuracy: locationModule.Accuracy.High,
           });
-          return;
+          return { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
         }
+      } catch {
+        // expo-location unavailable in this runtime, try browser API next
+      }
 
-        const currentPosition = await locationModule.getCurrentPositionAsync({
-          accuracy: locationModule.Accuracy.Balanced,
-        });
+      // 2. Fall back to browser geolocation (Snack web / any browser)
+      return getBrowserPosition();
+    }
+
+    async function loadCurrentLocation() {
+      try {
+        const userLocation = await resolveUserLocation();
 
         if (!isMounted) {
           return;
         }
 
-        const userLocation = {
-          latitude: currentPosition.coords.latitude,
-          longitude: currentPosition.coords.longitude,
-        };
         const restaurants = buildNearbyRestaurants(userLocation);
 
         setLocationState({
@@ -170,14 +179,17 @@ export default function PlottingOverlays() {
           restaurants,
           nearestRestaurant: findNearestRestaurant(userLocation, restaurants),
         });
-      } catch {
+      } catch (err) {
         if (!isMounted) {
           return;
         }
 
         setLocationState({
           status: "error",
-          message: "Unable to read the device location in this runtime. Open the app on a phone or simulator with location services enabled.",
+          message:
+            "Could not access your location. " +
+            (err?.message ?? "Please allow location access and try again.") +
+            " On Snack web, allow location in your browser. On a phone, open in Expo Go.",
           userLocation: null,
           restaurants: [],
           nearestRestaurant: null,
