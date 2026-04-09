@@ -1,9 +1,22 @@
 import React, { useState } from "react";
-import { StatusBar, Text, View } from "react-native";
-import MapView from "react-native-maps";
+import { Platform, StatusBar, Text, View } from "react-native";
 import styles from "./styles";
 
 StatusBar.setBarStyle("dark-content");
+
+let MapViewComponent = null;
+let PolygonComponent = null;
+
+if (Platform.OS !== "web") {
+  try {
+    const maps = require("react-native-maps");
+    MapViewComponent = maps.default ?? maps;
+    PolygonComponent = maps.Polygon ?? maps.default?.Polygon ?? null;
+  } catch {
+    MapViewComponent = null;
+    PolygonComponent = null;
+  }
+}
 
 const REGIONS = {
   ipa: {
@@ -40,6 +53,7 @@ const INITIAL_REGION = {
 export default function PlottingOverlays() {
   const [selectedOverlay, setSelectedOverlay] = useState("ipa");
   const activeOverlay = REGIONS[selectedOverlay];
+  const mapIsAvailable = Boolean(MapViewComponent && PolygonComponent);
 
   return (
     <View style={styles.container}>
@@ -63,17 +77,33 @@ export default function PlottingOverlays() {
           Stout Fans
         </Text>
       </View>
-      <MapView
-        style={styles.mapView}
-        showsPointsOfInterest={false}
-        initialRegion={INITIAL_REGION}
-      >
-        <MapView.Polygon
-          coordinates={activeOverlay.coordinates}
-          strokeColor={activeOverlay.strokeColor}
-          strokeWidth={activeOverlay.strokeWidth}
-        />
-      </MapView>
+      {mapIsAvailable ? (
+        <MapViewComponent
+          style={styles.mapView}
+          showsPointsOfInterest={false}
+          initialRegion={INITIAL_REGION}
+        >
+          <PolygonComponent
+            coordinates={activeOverlay.coordinates}
+            strokeColor={activeOverlay.strokeColor}
+            strokeWidth={activeOverlay.strokeWidth}
+          />
+        </MapViewComponent>
+      ) : (
+        <View style={styles.fallbackPanel}>
+          <Text style={styles.fallbackTitle}>Map preview unavailable in this runtime.</Text>
+          <Text style={styles.fallbackBody}>
+            Open the Snack on iOS or Android to render the native map overlay.
+          </Text>
+          <View style={styles.coordinateList}>
+            {activeOverlay.coordinates.map((coordinate, index) => (
+              <Text key={`${selectedOverlay}-${index}`} style={styles.coordinateItem}>
+                {index + 1}. {coordinate.latitude.toFixed(6)}, {coordinate.longitude.toFixed(6)}
+              </Text>
+            ))}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
