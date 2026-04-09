@@ -21,43 +21,43 @@ if (Platform.OS !== "web") {
   }
 }
 
-const RESTAURANTS = [
+const INITIAL_REGION = {
+  latitude: 43.65,
+  longitude: -79.38,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
+};
+
+const RESTAURANT_TEMPLATES = [
   {
     id: "north-bistro",
     name: "North Bistro",
     cuisine: "Contemporary Canadian",
-    latitude: 43.84972,
-    longitude: -79.0701,
+    latitudeOffset: 0.0021,
+    longitudeOffset: -0.0016,
   },
   {
     id: "market-grill",
     name: "Market Grill",
     cuisine: "Steakhouse",
-    latitude: 43.85111,
-    longitude: -79.0724,
+    latitudeOffset: -0.0014,
+    longitudeOffset: 0.0023,
   },
   {
     id: "harbor-bowl",
     name: "Harbor Bowl",
     cuisine: "Asian Fusion",
-    latitude: 43.84794,
-    longitude: -79.06851,
+    latitudeOffset: 0.0011,
+    longitudeOffset: 0.0012,
   },
   {
     id: "orchard-kitchen",
     name: "Orchard Kitchen",
     cuisine: "Brunch Cafe",
-    latitude: 43.85313,
-    longitude: -79.06986,
+    latitudeOffset: -0.0024,
+    longitudeOffset: -0.0019,
   },
 ];
-
-const INITIAL_REGION = {
-  latitude: 43.8486744,
-  longitude: -79.0695283,
-  latitudeDelta: 0.01,
-  longitudeDelta: 0.01,
-};
 
 function toRadians(value) {
   return (value * Math.PI) / 180;
@@ -81,8 +81,16 @@ function getDistanceKm(from, to) {
   return earthRadiusKm * c;
 }
 
-function findNearestRestaurant(userLocation) {
-  return RESTAURANTS.reduce((closest, restaurant) => {
+function buildNearbyRestaurants(userLocation) {
+  return RESTAURANT_TEMPLATES.map((restaurant) => ({
+    ...restaurant,
+    latitude: userLocation.latitude + restaurant.latitudeOffset,
+    longitude: userLocation.longitude + restaurant.longitudeOffset,
+  }));
+}
+
+function findNearestRestaurant(userLocation, restaurants) {
+  return restaurants.reduce((closest, restaurant) => {
     const distanceKm = getDistanceKm(userLocation, restaurant);
 
     if (!closest || distanceKm < closest.distanceKm) {
@@ -114,6 +122,7 @@ export default function PlottingOverlays() {
     status: "loading",
     message: "Requesting foreground location permission...",
     userLocation: null,
+    restaurants: [],
     nearestRestaurant: null,
   });
 
@@ -134,6 +143,7 @@ export default function PlottingOverlays() {
             status: "error",
             message: "Location permission was denied. Enable it to find the nearest restaurant.",
             userLocation: null,
+            restaurants: [],
             nearestRestaurant: null,
           });
           return;
@@ -151,12 +161,14 @@ export default function PlottingOverlays() {
           latitude: currentPosition.coords.latitude,
           longitude: currentPosition.coords.longitude,
         };
+        const restaurants = buildNearbyRestaurants(userLocation);
 
         setLocationState({
           status: "ready",
           message: "Nearest restaurant found using your current GPS position.",
           userLocation,
-          nearestRestaurant: findNearestRestaurant(userLocation),
+          restaurants,
+          nearestRestaurant: findNearestRestaurant(userLocation, restaurants),
         });
       } catch {
         if (!isMounted) {
@@ -167,6 +179,7 @@ export default function PlottingOverlays() {
           status: "error",
           message: "Unable to read the device location in this runtime. Open the app on a phone or simulator with location services enabled.",
           userLocation: null,
+          restaurants: [],
           nearestRestaurant: null,
         });
       }
@@ -230,7 +243,8 @@ export default function PlottingOverlays() {
         <MapViewComponent
           style={styles.mapView}
           showsPointsOfInterest={false}
-          initialRegion={region}
+          showsUserLocation
+          region={region}
         >
           <MarkerComponent
             coordinate={userLocation}
