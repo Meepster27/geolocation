@@ -33,20 +33,6 @@ const INITIAL_REGION = {
   longitudeDelta: 0.02,
 };
 
-function getBrowserPosition() {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      reject(new Error("navigator.geolocation not available"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-      (err) => reject(err),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  });
-}
-
 const RESTAURANT_TEMPLATES = [
   {
     id: "north-bistro",
@@ -149,13 +135,13 @@ export default function PlottingOverlays() {
     let isMounted = true;
 
     async function resolveUserLocation() {
-      // Web: expo-location returns a mocked position in Snack, so always use
-      // the real browser Geolocation API directly on the web platform.
+      // Snack web preview cannot access real device GPS — use the hardcoded
+      // home address so the map always shows the correct area on web.
       if (Platform.OS === "web") {
-        return getBrowserPosition();
+        return { ...HOME_LOCATION, _source: "home" };
       }
 
-      // Native (iOS / Android): use expo-location for the real device GPS.
+      // Native (iOS / Android via Expo Go): use expo-location for real GPS.
       const locationModule = require("expo-location");
       const permission = await locationModule.requestForegroundPermissionsAsync();
       if (permission.status !== "granted") {
@@ -164,7 +150,11 @@ export default function PlottingOverlays() {
       const fix = await locationModule.getCurrentPositionAsync({
         accuracy: locationModule.Accuracy.High,
       });
-      return { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
+      return {
+        latitude: fix.coords.latitude,
+        longitude: fix.coords.longitude,
+        _source: "gps",
+      };
     }
 
     async function loadCurrentLocation() {
@@ -183,16 +173,14 @@ export default function PlottingOverlays() {
           return;
         }
 
-        const source = gpsFailed
-          ? "home address fallback (GPS unavailable)"
-          : Platform.OS === "web"
-          ? "browser geolocation API"
-          : "expo-location (native GPS)";
+        const source = gpsFailed || userLocation._source === "home"
+          ? "home address · 8855 Framewood Dr, Newburgh IN (open in Expo Go for live GPS)"
+          : "live GPS";
         const restaurants = buildNearbyRestaurants(userLocation);
 
         setLocationState({
           status: "ready",
-          message: `Nearest restaurant found · source: ${source}`,
+          message: `Nearest restaurant found · ${source}`,
           userLocation,
           restaurants,
           nearestRestaurant: findNearestRestaurant(userLocation, restaurants),
