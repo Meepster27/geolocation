@@ -6,15 +6,89 @@ export default StyleSheet.create({
     backgroundColor: "#fff8f1",
     paddingTop: 48,
   },
-  legend: {
+  headerCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 24,
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    elevation: 3,
+  },
+  eyebrow: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: "#a3412b",
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: "#2b211b",
+    marginBottom: 8,
+  },
+  description: {
+    fontSize: 16,
+    lineHeight: 22,
+    color: "#6b5243",
+  },
+  summaryCard: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: "#f7ebe1",
+  },
+  summaryLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    color: "#8f503d",
+    marginBottom: 6,
+  },
+  summaryName: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#2b211b",
+    marginBottom: 4,
+  },
+  summaryMeta: {
+    fontSize: 16,
+    color: "#6b5243",
+    marginBottom: 6,
+  },
+  summaryDistance: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#a3412b",
+  },
+  coordinates: {
+    marginTop: 14,
+    fontSize: 15,
+    color: "#4e3a30",
+  },
+  loadingRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    alignItems: "center",
+    gap: 10,
+    marginTop: 16,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: "#6b5243",
   },
   mapView: {
     flex: 1,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 24,
   },
   fallbackPanel: {
     flex: 1,
@@ -51,16 +125,5 @@ export default StyleSheet.create({
   coordinateItem: {
     fontSize: 16,
     color: "#2b211b",
-  },
-  ipaText: {
-    color: "coral",
-    fontSize: 18,
-  },
-  stoutText: {
-    color: "firebrick",
-    fontSize: 18,
-  },
-  boldText: {
-    fontWeight: "700",
   },
 });

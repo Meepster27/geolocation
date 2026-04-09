@@ -4,6 +4,14 @@
     "slug": "geolocation",
     "version": "1.0.0",
     "orientation": "portrait",
-    "assetBundlePatterns": ["**/*"]
+    "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow geolocation to use your current position and identify the nearest restaurant."
+        }
+      ]
+    ]
   }
 }
