@@ -21,11 +21,16 @@ if (Platform.OS !== "web") {
   }
 }
 
+// 8855 Framewood Drive, Newburgh IN 47630 (town-center anchor for Newburgh)
+const HOME_LOCATION = {
+  latitude: 37.9457,
+  longitude: -87.4047,
+};
+
 const INITIAL_REGION = {
-  latitude: 37.965,
-  longitude: -87.406,
-  latitudeDelta: 0.05,
-  longitudeDelta: 0.05,
+  ...HOME_LOCATION,
+  latitudeDelta: 0.02,
+  longitudeDelta: 0.02,
 };
 
 function getBrowserPosition() {
@@ -163,14 +168,26 @@ export default function PlottingOverlays() {
     }
 
     async function loadCurrentLocation() {
-      try {
-        const userLocation = await resolveUserLocation();
+      let gpsFailed = false;
+      let userLocation;
 
+      try {
+        userLocation = await resolveUserLocation();
+      } catch {
+        gpsFailed = true;
+        userLocation = HOME_LOCATION;
+      }
+
+      try {
         if (!isMounted) {
           return;
         }
 
-        const source = Platform.OS === "web" ? "browser geolocation API" : "expo-location (native GPS)";
+        const source = gpsFailed
+          ? "home address fallback (GPS unavailable)"
+          : Platform.OS === "web"
+          ? "browser geolocation API"
+          : "expo-location (native GPS)";
         const restaurants = buildNearbyRestaurants(userLocation);
 
         setLocationState({
@@ -189,8 +206,7 @@ export default function PlottingOverlays() {
           status: "error",
           message:
             "Could not access your location. " +
-            (err?.message ?? "Please allow location access and try again.") +
-            " On Snack web, allow location in your browser. On a phone, open in Expo Go.",
+            (err?.message ?? "Please allow location access and try again."),
           userLocation: null,
           restaurants: [],
           nearestRestaurant: null,
