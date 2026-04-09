@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "geolocation",
+    "slug": "geolocation",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "assetBundlePatterns": ["**/*"]
+  }
+}
