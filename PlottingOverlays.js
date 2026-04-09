@@ -144,22 +144,22 @@ export default function PlottingOverlays() {
     let isMounted = true;
 
     async function resolveUserLocation() {
-      // 1. Try expo-location (native iOS/Android)
-      try {
-        const locationModule = require("expo-location");
-        const permission = await locationModule.requestForegroundPermissionsAsync();
-        if (permission.status === "granted") {
-          const fix = await locationModule.getCurrentPositionAsync({
-            accuracy: locationModule.Accuracy.High,
-          });
-          return { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
-        }
-      } catch {
-        // expo-location unavailable in this runtime, try browser API next
+      // Web: expo-location returns a mocked position in Snack, so always use
+      // the real browser Geolocation API directly on the web platform.
+      if (Platform.OS === "web") {
+        return getBrowserPosition();
       }
 
-      // 2. Fall back to browser geolocation (Snack web / any browser)
-      return getBrowserPosition();
+      // Native (iOS / Android): use expo-location for the real device GPS.
+      const locationModule = require("expo-location");
+      const permission = await locationModule.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") {
+        throw new Error("Location permission was denied.");
+      }
+      const fix = await locationModule.getCurrentPositionAsync({
+        accuracy: locationModule.Accuracy.High,
+      });
+      return { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
     }
 
     async function loadCurrentLocation() {
@@ -170,11 +170,12 @@ export default function PlottingOverlays() {
           return;
         }
 
+        const source = Platform.OS === "web" ? "browser geolocation API" : "expo-location (native GPS)";
         const restaurants = buildNearbyRestaurants(userLocation);
 
         setLocationState({
           status: "ready",
-          message: "Nearest restaurant found using your current GPS position.",
+          message: `Nearest restaurant found · source: ${source}`,
           userLocation,
           restaurants,
           nearestRestaurant: findNearestRestaurant(userLocation, restaurants),
@@ -239,7 +240,7 @@ export default function PlottingOverlays() {
 
         {userLocation ? (
           <Text style={styles.coordinates}>
-            You: {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
+            Your position: {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
           </Text>
         ) : null}
 
