@@ -12,8 +12,13 @@ export default function App() {
     }
   }, []);
 
+  const isWeb = Platform.OS === "web";
+  const containerStyle = isWeb 
+    ? { flex: 1, backgroundColor: "#fff8f1" }
+    : styles.container;
+
   return (
-    <SafeAreaView style={[styles.container, { flex: 1 }]}>
+    <SafeAreaView style={[containerStyle, { flex: 1 }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <View style={{ flex: 1 }}>
         <PlottingOverlays />
