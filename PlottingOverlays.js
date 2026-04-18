@@ -2,6 +2,94 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, StatusBar, Text, View } from "react-native";
 import styles from "./styles";
 
+// Simple web map preview component
+function WebMapPreview({ userLocation, nearestRestaurant, routeCoordinates }) {
+  const canvasRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || !userLocation || !nearestRestaurant) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Clear canvas
+    ctx.fillStyle = "#e8f4f8";
+    ctx.fillRect(0, 0, width, height);
+
+    // Grid
+    ctx.strokeStyle = "#d0e8ed";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= width; i += 40) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, height);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= height; i += 40) {
+      ctx.beginPath();
+      ctx.moveTo(0, i);
+      ctx.lineTo(width, i);
+      ctx.stroke();
+    }
+
+    // Draw route line
+    if (routeCoordinates.length === 2) {
+      const startX = (width * 0.4);
+      const startY = (height * 0.5);
+      const endX = (width * 0.65);
+      const endY = (height * 0.35);
+
+      ctx.strokeStyle = "#c7512c";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+    }
+
+    // Draw user location marker
+    ctx.fillStyle = "#1b6b75";
+    ctx.beginPath();
+    ctx.arc(width * 0.4, height * 0.5, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw restaurant marker
+    ctx.fillStyle = "#c7512c";
+    ctx.beginPath();
+    ctx.arc(width * 0.65, height * 0.35, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = "#2b211b";
+    ctx.font = "12px sans-serif";
+    ctx.fillText("You", width * 0.4 - 10, height * 0.5 - 20);
+    ctx.fillText(nearestRestaurant.name, width * 0.65 - 30, height * 0.35 - 20);
+  }, [userLocation, nearestRestaurant, routeCoordinates]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={300}
+      height={250}
+      style={{
+        border: "1px solid #ddd",
+        borderRadius: 12,
+        backgroundColor: "#e8f4f8",
+        marginVertical: 16,
+        alignSelf: "center",
+      }}
+    />
+  );
+}
+
 StatusBar.setBarStyle("dark-content");
 
 let MapViewComponent = null;
@@ -291,6 +379,13 @@ export default function PlottingOverlays() {
         <View style={styles.fallbackPanel}>
           <Text style={styles.fallbackTitle}>Map preview unavailable.</Text>
           <Text style={styles.fallbackBody}>{message}</Text>
+          {Platform.OS === "web" && userLocation && nearestRestaurant ? (
+            <WebMapPreview
+              userLocation={userLocation}
+              nearestRestaurant={nearestRestaurant}
+              routeCoordinates={routeCoordinates}
+            />
+          ) : null}
           {nearestRestaurant ? (
             <View style={styles.coordinateList}>
               <Text style={styles.coordinateItem}>Restaurant: {nearestRestaurant.name}</Text>
