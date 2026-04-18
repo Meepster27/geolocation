@@ -210,7 +210,7 @@ export default function PlottingOverlays() {
   }, []);
 
   const { message, nearestRestaurant, status, userLocation } = locationState;
-  const mapIsAvailable = Boolean(MapViewComponent && PolylineComponent && MarkerComponent);
+  const mapIsAvailable = Boolean(MapViewComponent && PolylineComponent && MarkerComponent) && Platform.OS !== "web";
   const routeCoordinates =
     userLocation && nearestRestaurant
       ? createRouteCoordinates(userLocation, nearestRestaurant)
