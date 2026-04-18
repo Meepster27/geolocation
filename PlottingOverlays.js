@@ -1,94 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, StatusBar, Text, View } from "react-native";
+import { ActivityIndicator, Platform, ScrollView, StatusBar, Text, View } from "react-native";
 import styles from "./styles";
-
-// Simple web map preview component
-function WebMapPreview({ userLocation, nearestRestaurant, routeCoordinates }) {
-  const canvasRef = React.useRef(null);
-
-  useEffect(() => {
-    if (!canvasRef.current || !userLocation || !nearestRestaurant) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const width = canvas.width;
-    const height = canvas.height;
-
-    // Clear canvas
-    ctx.fillStyle = "#e8f4f8";
-    ctx.fillRect(0, 0, width, height);
-
-    // Grid
-    ctx.strokeStyle = "#d0e8ed";
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= width; i += 40) {
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i, height);
-      ctx.stroke();
-    }
-    for (let i = 0; i <= height; i += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(width, i);
-      ctx.stroke();
-    }
-
-    // Draw route line
-    if (routeCoordinates.length === 2) {
-      const startX = (width * 0.4);
-      const startY = (height * 0.5);
-      const endX = (width * 0.65);
-      const endY = (height * 0.35);
-
-      ctx.strokeStyle = "#c7512c";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(startX, startY);
-      ctx.lineTo(endX, endY);
-      ctx.stroke();
-    }
-
-    // Draw user location marker
-    ctx.fillStyle = "#1b6b75";
-    ctx.beginPath();
-    ctx.arc(width * 0.4, height * 0.5, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Draw restaurant marker
-    ctx.fillStyle = "#c7512c";
-    ctx.beginPath();
-    ctx.arc(width * 0.65, height * 0.35, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Labels
-    ctx.fillStyle = "#2b211b";
-    ctx.font = "12px sans-serif";
-    ctx.fillText("You", width * 0.4 - 10, height * 0.5 - 20);
-    ctx.fillText(nearestRestaurant.name, width * 0.65 - 30, height * 0.35 - 20);
-  }, [userLocation, nearestRestaurant, routeCoordinates]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={300}
-      height={250}
-      style={{
-        border: "1px solid #ddd",
-        borderRadius: 12,
-        backgroundColor: "#e8f4f8",
-        marginVertical: 16,
-        alignSelf: "center",
-      }}
-    />
-  );
-}
 
 StatusBar.setBarStyle("dark-content");
 
@@ -210,6 +122,42 @@ function createRouteCoordinates(userLocation, restaurant) {
   ];
 }
 
+function WebMapPreview({ userLocation, nearestRestaurant }) {
+  if (!userLocation || !nearestRestaurant) return null;
+
+  const baseMapUrl = "https://maps.googleapis.com/maps/api/staticmap";
+  const params = new URLSearchParams({
+    center: `${userLocation.latitude},${userLocation.longitude}`,
+    zoom: "15",
+    size: "600x400",
+    markers: [
+      `color:blue|${userLocation.latitude},${userLocation.longitude}`,
+      `color:red|${nearestRestaurant.latitude},${nearestRestaurant.longitude}`,
+    ].join("|"),
+    key: "AIzaSyDummyKeyForPreview", // Note: This is a demo key, won't work without valid API key
+  });
+
+  return (
+    <View style={styles.webMapContainer}>
+      <Text style={styles.webMapLabel}>Map Preview</Text>
+      <Text style={styles.webMapNote}>
+        (Open in Expo Go on your device for interactive map with live GPS)
+      </Text>
+      <View style={styles.mapPlaceholder}>
+        <Text style={styles.mapPlaceholderText}>
+          📍 User: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+        </Text>
+        <Text style={styles.mapPlaceholderText}>
+          🍽️ {nearestRestaurant.name}: {nearestRestaurant.latitude.toFixed(4)}, {nearestRestaurant.longitude.toFixed(4)}
+        </Text>
+        <Text style={styles.mapPlaceholderText}>
+          Distance: {nearestRestaurant.distanceKm.toFixed(2)} km
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function PlottingOverlays() {
   const [locationState, setLocationState] = useState({
     status: "loading",
@@ -317,7 +265,8 @@ export default function PlottingOverlays() {
       styles.container,
       Platform.OS === "web" && { paddingTop: 0 }
     ]}>
-      <View style={styles.headerCard}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} scrollEnabled={true}>
+        <View style={styles.headerCard}>
         <Text style={styles.eyebrow}>Native Geolocation Demo</Text>
         <Text style={styles.title}>Nearest Restaurant Finder</Text>
         <Text style={styles.description}>{message}</Text>
@@ -375,17 +324,12 @@ export default function PlottingOverlays() {
             strokeWidth={5}
           />
         </MapViewComponent>
+      ) : Platform.OS === "web" ? (
+        <WebMapPreview userLocation={userLocation} nearestRestaurant={nearestRestaurant} />
       ) : (
         <View style={styles.fallbackPanel}>
           <Text style={styles.fallbackTitle}>Map preview unavailable.</Text>
           <Text style={styles.fallbackBody}>{message}</Text>
-          {Platform.OS === "web" && userLocation && nearestRestaurant ? (
-            <WebMapPreview
-              userLocation={userLocation}
-              nearestRestaurant={nearestRestaurant}
-              routeCoordinates={routeCoordinates}
-            />
-          ) : null}
           {nearestRestaurant ? (
             <View style={styles.coordinateList}>
               <Text style={styles.coordinateItem}>Restaurant: {nearestRestaurant.name}</Text>
@@ -400,6 +344,7 @@ export default function PlottingOverlays() {
           ) : null}
         </View>
       )}
+      </ScrollView>
     </View>
   );
 }
