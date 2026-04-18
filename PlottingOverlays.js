@@ -225,7 +225,10 @@ export default function PlottingOverlays() {
     : INITIAL_REGION;
 
   return (
-    <View style={styles.container}>
+    <View style={[
+      styles.container,
+      Platform.OS === "web" && { paddingTop: 0 }
+    ]}>
       <View style={styles.headerCard}>
         <Text style={styles.eyebrow}>Native Geolocation Demo</Text>
         <Text style={styles.title}>Nearest Restaurant Finder</Text>
