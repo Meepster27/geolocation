@@ -154,13 +154,26 @@ export default function PlottingOverlays() {
         </View>
 
         <ScrollView contentContainerStyle={styles.infoContent}>
-          {/* User location card */}
+          {/* User location card — mirrors Chapter 21 Figure 21.1 */}
           <View style={styles.poiCard}>
             <Text style={styles.poiLabel}>📍 Your location</Text>
             {userLocation ? (
-              <Text style={styles.poiValue}>
-                {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
-              </Text>
+              <View style={styles.coordTable}>
+                <View style={styles.coordRow}>
+                  <Text style={styles.coordKey}>Latitude</Text>
+                  <Text style={styles.coordVal}>{userLocation.latitude.toFixed(6)}</Text>
+                </View>
+                <View style={styles.coordRow}>
+                  <Text style={styles.coordKey}>Longitude</Text>
+                  <Text style={styles.coordVal}>{userLocation.longitude.toFixed(6)}</Text>
+                </View>
+                <View style={styles.coordRow}>
+                  <Text style={styles.coordKey}>Source</Text>
+                  <Text style={styles.coordVal}>
+                    {source === "gps" ? "Live GPS" : "Fallback (Newburgh, IN)"}
+                  </Text>
+                </View>
+              </View>
             ) : (
               <Text style={styles.poiValue}>Acquiring…</Text>
             )}
@@ -197,7 +210,7 @@ export default function PlottingOverlays() {
   if (mapReady) {
     return (
       <View style={styles.container}>
-        <MapView style={styles.map} region={mapRegion} showsUserLocation>
+        <MapView style={styles.map} region={mapRegion} showsUserLocation followUserLocation>
           <Marker
             coordinate={userLocation}
             title="You are here"
@@ -335,6 +348,24 @@ const styles = StyleSheet.create({
   poiValue: {
     fontSize: 14,
     color: "#6b7280",
+  },
+  coordTable: {
+    marginTop: 6,
+    gap: 6,
+  },
+  coordRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  coordKey: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontWeight: "600",
+  },
+  coordVal: {
+    fontSize: 14,
+    color: "#111827",
+    fontWeight: "500",
   },
   mapBtn: {
     backgroundColor: "#2563eb",
