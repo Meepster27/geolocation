@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import MapEmbed from "./MapEmbed";
 
 // react-native-maps is unavailable in the Expo web preview — load lazily
 let MapView = null;
@@ -41,6 +42,7 @@ export default function PlottingOverlays() {
     source: null,
     errorMessage: null,
   });
+  const [screen, setScreen] = useState("info"); // "info" | "map"
 
   useEffect(() => {
     let active = true;
@@ -114,40 +116,94 @@ export default function PlottingOverlays() {
     MapView !== null &&
     Marker !== null;
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Nearby Restaurant Finder</Text>
-        {status === "loading" ? (
-          <View style={styles.row}>
-            <ActivityIndicator size="small" color="#2563eb" />
-            <Text style={styles.subtitle}> Acquiring location…</Text>
-          </View>
-        ) : (
-          <Text style={styles.subtitle}>
-            {source === "gps"
-              ? `Live GPS · ${userLocation.latitude.toFixed(5)}, ${userLocation.longitude.toFixed(5)}`
-              : "Fallback location – Newburgh, IN (run in Expo Go for live GPS)"}
-          </Text>
-        )}
-        {errorMessage ? (
-          <Text style={styles.error}>{errorMessage}</Text>
-        ) : null}
-      </View>
+  // ─── Back button (used on every map / fallback map screen) ───────────────
+  function BackButton() {
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+        onPress={() => setScreen("info")}
+        accessibilityLabel="Back to info"
+        accessibilityRole="button"
+      >
+        <Text style={styles.backBtnText}>← Back</Text>
+      </Pressable>
+    );
+  }
 
-      {/* Map with markers */}
-      {mapReady ? (
+  // ─── INFO SCREEN ─────────────────────────────────────────────────────────
+  if (screen === "info") {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Nearby Restaurant Finder</Text>
+          {status === "loading" ? (
+            <View style={styles.row}>
+              <ActivityIndicator size="small" color="#2563eb" />
+              <Text style={styles.subtitle}> Acquiring location…</Text>
+            </View>
+          ) : (
+            <Text style={styles.subtitle}>
+              {source === "gps"
+                ? `Live GPS · ${userLocation.latitude.toFixed(5)}, ${userLocation.longitude.toFixed(5)}`
+                : "Fallback location – Newburgh, IN (run in Expo Go for live GPS)"}
+            </Text>
+          )}
+          {errorMessage ? (
+            <Text style={styles.error}>{errorMessage}</Text>
+          ) : null}
+        </View>
+
+        <ScrollView contentContainerStyle={styles.infoContent}>
+          {/* User location card */}
+          <View style={styles.poiCard}>
+            <Text style={styles.poiLabel}>📍 Your location</Text>
+            {userLocation ? (
+              <Text style={styles.poiValue}>
+                {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
+              </Text>
+            ) : (
+              <Text style={styles.poiValue}>Acquiring…</Text>
+            )}
+          </View>
+
+          {/* Restaurant POI card */}
+          <View style={styles.poiCard}>
+            <Text style={styles.poiLabel}>🍽 Nearby restaurant</Text>
+            <Text style={styles.poiName}>{NEARBY_RESTAURANT.name}</Text>
+            <Text style={styles.poiValue}>{NEARBY_RESTAURANT.cuisine}</Text>
+            <Text style={styles.poiValue}>{NEARBY_RESTAURANT.address}</Text>
+          </View>
+
+          {/* Open map button */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.mapBtn,
+              status !== "ready" && styles.mapBtnDisabled,
+              pressed && status === "ready" && styles.mapBtnPressed,
+            ]}
+            onPress={() => setScreen("map")}
+            disabled={status !== "ready"}
+          >
+            <Text style={styles.mapBtnText}>
+              {status === "loading" ? "Loading map…" : "Open Map"}
+            </Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ─── MAP SCREEN (native interactive map) ─────────────────────────────────
+  if (mapReady) {
+    return (
+      <View style={styles.container}>
         <MapView style={styles.map} region={mapRegion} showsUserLocation>
-          {/* Current user position */}
           <Marker
             coordinate={userLocation}
             title="You are here"
             description="Your current location"
             pinColor="blue"
           />
-
-          {/* Nearby restaurant — point of interest annotation */}
           <Marker
             coordinate={NEARBY_RESTAURANT}
             title={NEARBY_RESTAURANT.name}
@@ -165,28 +221,52 @@ export default function PlottingOverlays() {
             ) : null}
           </Marker>
         </MapView>
-      ) : status === "ready" ? (
-        /* Text fallback for web / missing maps package */
-        <View style={styles.fallback}>
-          <Text style={styles.fallbackTitle}>Interactive map unavailable</Text>
-          <Text style={styles.fallbackBody}>
-            Open this project in Expo Go on a physical device to see the live
-            map with GPS tracking.
-          </Text>
-          <View style={styles.poiCard}>
-            <Text style={styles.poiLabel}>📍 Your location</Text>
-            <Text style={styles.poiValue}>
-              {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
+
+        {/* Back button overlaid on the map */}
+        <View style={styles.backOverlay}>
+          <BackButton />
+        </View>
+      </View>
+    );
+  }
+
+  // ─── MAP SCREEN FALLBACK (web → OSM iframe; native without maps → text) ────
+  return (
+    <View style={[styles.container, { position: "relative" }]}>
+      {Platform.OS === "web" ? (
+        // Web: real interactive map via OpenStreetMap embed
+        <>
+          <MapEmbed userLocation={userLocation} restaurant={NEARBY_RESTAURANT} />
+          <View style={styles.backOverlay}>
+            <BackButton />
+          </View>
+        </>
+      ) : (
+        // Native without react-native-maps: text fallback
+        <>
+          <View style={styles.header}>
+            <BackButton />
+            <Text style={[styles.title, { marginTop: 8 }]}>Map Preview</Text>
+            <Text style={styles.subtitle}>
+              Open in Expo Go on a device for an interactive map.
             </Text>
           </View>
-          <View style={styles.poiCard}>
-            <Text style={styles.poiLabel}>🍽 Nearby restaurant</Text>
-            <Text style={styles.poiName}>{NEARBY_RESTAURANT.name}</Text>
-            <Text style={styles.poiValue}>{NEARBY_RESTAURANT.cuisine}</Text>
-            <Text style={styles.poiValue}>{NEARBY_RESTAURANT.address}</Text>
-          </View>
-        </View>
-      ) : null}
+          <ScrollView contentContainerStyle={styles.infoContent}>
+            <View style={styles.poiCard}>
+              <Text style={styles.poiLabel}>📍 Your location</Text>
+              <Text style={styles.poiValue}>
+                {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
+              </Text>
+            </View>
+            <View style={styles.poiCard}>
+              <Text style={styles.poiLabel}>🍽 Nearby restaurant</Text>
+              <Text style={styles.poiName}>{NEARBY_RESTAURANT.name}</Text>
+              <Text style={styles.poiValue}>{NEARBY_RESTAURANT.cuisine}</Text>
+              <Text style={styles.poiValue}>{NEARBY_RESTAURANT.address}</Text>
+            </View>
+          </ScrollView>
+        </>
+      )}
     </View>
   );
 }
@@ -223,37 +303,10 @@ const styles = StyleSheet.create({
     color: "#dc2626",
     marginTop: 4,
   },
-  map: {
-    flex: 1,
-  },
-  callout: {
-    minWidth: 180,
-    padding: 8,
-  },
-  calloutTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 2,
-  },
-  calloutBody: {
-    fontSize: 13,
-    color: "#6b7280",
-  },
-  fallback: {
-    flex: 1,
-    padding: 24,
+  // Info screen
+  infoContent: {
+    padding: 16,
     gap: 16,
-  },
-  fallbackTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  fallbackBody: {
-    fontSize: 15,
-    color: "#6b7280",
-    lineHeight: 22,
   },
   poiCard: {
     backgroundColor: "#ffffff",
@@ -281,6 +334,67 @@ const styles = StyleSheet.create({
   },
   poiValue: {
     fontSize: 14,
+    color: "#6b7280",
+  },
+  mapBtn: {
+    backgroundColor: "#2563eb",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  mapBtnDisabled: {
+    backgroundColor: "#93c5fd",
+  },
+  mapBtnPressed: {
+    backgroundColor: "#1d4ed8",
+  },
+  mapBtnText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  // Map screen
+  map: {
+    flex: 1,
+  },
+  backOverlay: {
+    position: "absolute",
+    top: Platform.OS === "android" ? 44 : 16,
+    left: 16,
+  },
+  backBtn: {
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  backBtnPressed: {
+    backgroundColor: "#f3f4f6",
+  },
+  backBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  // Callout
+  callout: {
+    minWidth: 180,
+    padding: 8,
+  },
+  calloutTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  calloutBody: {
+    fontSize: 13,
     color: "#6b7280",
   },
 });
