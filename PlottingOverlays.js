@@ -24,13 +24,15 @@ const FALLBACK_LOCATION = {
   longitude: -87.4047,
 };
 
-// Single nearby restaurant annotated as a point of interest
+// Single nearby restaurant annotated as a point of interest.
+// Coordinates are expressed as offsets from the user's location so the pin
+// always appears nearby regardless of where the device actually is.
 const NEARBY_RESTAURANT = {
   name: "Bob Evans",
   address: "8900 Bell Oaks Dr, Newburgh, IN 47630",
   cuisine: "American Home-Style",
-  latitude: 37.9501,
-  longitude: -87.4102,
+  latitudeOffset:  0.0044,   // ~0.5 km north
+  longitudeOffset: -0.0055,  // ~0.5 km west
 };
 
 
@@ -115,6 +117,14 @@ export default function PlottingOverlays() {
     userLocation !== null &&
     MapView !== null &&
     Marker !== null;
+
+  // Restaurant pin placed relative to user so both web and native look the same
+  const restaurantCoord = userLocation
+    ? {
+        latitude:  userLocation.latitude  + NEARBY_RESTAURANT.latitudeOffset,
+        longitude: userLocation.longitude + NEARBY_RESTAURANT.longitudeOffset,
+      }
+    : null;
 
   // ─── Back button (used on every map / fallback map screen) ───────────────
   function BackButton() {
@@ -210,7 +220,7 @@ export default function PlottingOverlays() {
   if (mapReady) {
     return (
       <View style={styles.container}>
-        <MapView style={styles.map} region={mapRegion} showsUserLocation followUserLocation>
+        <MapView style={styles.map} region={mapRegion} showsUserLocation followUserLocation showsPointsOfInterest>
           <Marker
             coordinate={userLocation}
             title="You are here"
@@ -218,7 +228,7 @@ export default function PlottingOverlays() {
             pinColor="blue"
           />
           <Marker
-            coordinate={NEARBY_RESTAURANT}
+            coordinate={restaurantCoord}
             title={NEARBY_RESTAURANT.name}
             description={`${NEARBY_RESTAURANT.cuisine} · ${NEARBY_RESTAURANT.address}`}
             pinColor="red"
@@ -249,7 +259,7 @@ export default function PlottingOverlays() {
       {Platform.OS === "web" ? (
         // Web: real interactive map via OpenStreetMap embed
         <>
-          <MapEmbed userLocation={userLocation} restaurant={NEARBY_RESTAURANT} />
+          <MapEmbed userLocation={userLocation} restaurant={restaurantCoord} />
           <View style={styles.backOverlay}>
             <BackButton />
           </View>

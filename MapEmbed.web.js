@@ -1,7 +1,8 @@
 import React from "react";
 
-// Web-only component: renders an OpenStreetMap iframe that shows both
-// the user's location (fallback anchor) and the nearby restaurant marker.
+// Web-only component: renders an OpenStreetMap iframe centered on the user's
+// location with the restaurant marker nearby — matching what react-native-maps
+// shows on Android/iOS.
 // Metro/webpack picks this file on web; MapEmbed.js is used on native.
 export default function MapEmbed({ userLocation, restaurant }) {
   const west  = Math.min(userLocation.longitude, restaurant.longitude) - 0.012;
