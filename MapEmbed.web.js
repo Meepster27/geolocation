@@ -8,26 +8,28 @@ export default function MapEmbed({ userLocation, restaurant }) {
   const [fetchStatus, setFetchStatus] = useState("Loading nearby restaurants…");
 
   useEffect(() => {
-    const radius = 800;
+    const radius = 2000;
     const query =
-      `[out:json][timeout:15];` +
-      `node["amenity"="restaurant"](around:${radius},${userLocation.latitude},${userLocation.longitude});` +
-      `out body;`;
+      `[out:json][timeout:25];` +
+      `nwr["amenity"="restaurant"](around:${radius},${userLocation.latitude},${userLocation.longitude});` +
+      `out center;`;
 
     fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
-      body: query,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
     })
       .then((r) => r.json())
       .then((data) => {
         const results = (data.elements || [])
-          .filter((el) => el.lat && el.lon)
           .map((el) => ({
-            lat: el.lat,
-            lon: el.lon,
+            // nodes have lat/lon directly; ways/relations expose it via center
+            lat: el.lat ?? el.center?.lat,
+            lon: el.lon ?? el.center?.lon,
             name: (el.tags && el.tags.name) || "Restaurant",
             cuisine: (el.tags && el.tags.cuisine) || "",
-          }));
+          }))
+          .filter((el) => el.lat && el.lon);
         setNearbyRestaurants(results);
         setFetchStatus(`${results.length} restaurant${results.length !== 1 ? "s" : ""} found nearby`);
       })
