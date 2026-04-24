@@ -1,350 +1,286 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, ScrollView, StatusBar, Text, View } from "react-native";
-import styles from "./styles";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 
-StatusBar.setBarStyle("dark-content");
-
-let MapViewComponent = null;
-let PolylineComponent = null;
-let MarkerComponent = null;
+// react-native-maps is unavailable in the Expo web preview — load lazily
+let MapView = null;
+let Marker = null;
+let Callout = null;
 
 if (Platform.OS !== "web") {
   try {
-    const maps = require("react-native-maps");
-    MapViewComponent = maps.default ?? maps;
-    PolylineComponent = maps.Polyline ?? maps.default?.Polyline ?? null;
-    MarkerComponent = maps.Marker ?? maps.default?.Marker ?? null;
+    const RNMaps = require("react-native-maps");
+    MapView = RNMaps.default ?? RNMaps;
+    Marker = RNMaps.Marker ?? RNMaps.default?.Marker ?? null;
+    Callout = RNMaps.Callout ?? RNMaps.default?.Callout ?? null;
   } catch {
-    MapViewComponent = null;
-    PolylineComponent = null;
-    MarkerComponent = null;
+    // Package not installed — falls through to text fallback
   }
 }
 
-// 8855 Framewood Drive, Newburgh IN 47630 (town-center anchor for Newburgh)
-const HOME_LOCATION = {
+// Fallback anchor used when GPS is unavailable (Newburgh, IN)
+const FALLBACK_LOCATION = {
   latitude: 37.9457,
   longitude: -87.4047,
 };
 
-const INITIAL_REGION = {
-  ...HOME_LOCATION,
-  latitudeDelta: 0.02,
-  longitudeDelta: 0.02,
+// Single nearby restaurant annotated as a point of interest
+const NEARBY_RESTAURANT = {
+  name: "Bob Evans",
+  address: "8900 Bell Oaks Dr, Newburgh, IN 47630",
+  cuisine: "American Home-Style",
+  latitude: 37.9501,
+  longitude: -87.4102,
 };
 
-const RESTAURANT_TEMPLATES = [
-  {
-    id: "north-bistro",
-    name: "North Bistro",
-    cuisine: "Contemporary Canadian",
-    latitudeOffset: 0.0021,
-    longitudeOffset: -0.0016,
-  },
-  {
-    id: "market-grill",
-    name: "Market Grill",
-    cuisine: "Steakhouse",
-    latitudeOffset: -0.0014,
-    longitudeOffset: 0.0023,
-  },
-  {
-    id: "harbor-bowl",
-    name: "Harbor Bowl",
-    cuisine: "Asian Fusion",
-    latitudeOffset: 0.0011,
-    longitudeOffset: 0.0012,
-  },
-  {
-    id: "orchard-kitchen",
-    name: "Orchard Kitchen",
-    cuisine: "Brunch Cafe",
-    latitudeOffset: -0.0024,
-    longitudeOffset: -0.0019,
-  },
-];
 
-function toRadians(value) {
-  return (value * Math.PI) / 180;
-}
-
-function getDistanceKm(from, to) {
-  const earthRadiusKm = 6371;
-  const deltaLatitude = toRadians(to.latitude - from.latitude);
-  const deltaLongitude = toRadians(to.longitude - from.longitude);
-  const fromLatitude = toRadians(from.latitude);
-  const toLatitude = toRadians(to.latitude);
-
-  const a =
-    Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
-    Math.cos(fromLatitude) *
-      Math.cos(toLatitude) *
-      Math.sin(deltaLongitude / 2) *
-      Math.sin(deltaLongitude / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusKm * c;
-}
-
-function buildNearbyRestaurants(userLocation) {
-  return RESTAURANT_TEMPLATES.map((restaurant) => ({
-    ...restaurant,
-    latitude: userLocation.latitude + restaurant.latitudeOffset,
-    longitude: userLocation.longitude + restaurant.longitudeOffset,
-  }));
-}
-
-function findNearestRestaurant(userLocation, restaurants) {
-  return restaurants.reduce((closest, restaurant) => {
-    const distanceKm = getDistanceKm(userLocation, restaurant);
-
-    if (!closest || distanceKm < closest.distanceKm) {
-      return {
-        ...restaurant,
-        distanceKm,
-      };
-    }
-
-    return closest;
-  }, null);
-}
-
-function createRouteCoordinates(userLocation, restaurant) {
-  return [
-    {
-      latitude: userLocation.latitude,
-      longitude: userLocation.longitude,
-    },
-    {
-      latitude: restaurant.latitude,
-      longitude: restaurant.longitude,
-    },
-  ];
-}
-
-function WebMapPreview({ userLocation, nearestRestaurant }) {
-  if (!userLocation || !nearestRestaurant) return null;
-
-  const baseMapUrl = "https://maps.googleapis.com/maps/api/staticmap";
-  const params = new URLSearchParams({
-    center: `${userLocation.latitude},${userLocation.longitude}`,
-    zoom: "15",
-    size: "600x400",
-    markers: [
-      `color:blue|${userLocation.latitude},${userLocation.longitude}`,
-      `color:red|${nearestRestaurant.latitude},${nearestRestaurant.longitude}`,
-    ].join("|"),
-    key: "AIzaSyDummyKeyForPreview", // Note: This is a demo key, won't work without valid API key
-  });
-
-  return (
-    <View style={styles.webMapContainer}>
-      <Text style={styles.webMapLabel}>Map Preview</Text>
-      <Text style={styles.webMapNote}>
-        (Open in Expo Go on your device for interactive map with live GPS)
-      </Text>
-      <View style={styles.mapPlaceholder}>
-        <Text style={styles.mapPlaceholderText}>
-          📍 User: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
-        </Text>
-        <Text style={styles.mapPlaceholderText}>
-          🍽️ {nearestRestaurant.name}: {nearestRestaurant.latitude.toFixed(4)}, {nearestRestaurant.longitude.toFixed(4)}
-        </Text>
-        <Text style={styles.mapPlaceholderText}>
-          Distance: {nearestRestaurant.distanceKm.toFixed(2)} km
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 export default function PlottingOverlays() {
-  const [locationState, setLocationState] = useState({
+  const [state, setState] = useState({
     status: "loading",
-    message: "Requesting foreground location permission...",
     userLocation: null,
-    restaurants: [],
-    nearestRestaurant: null,
+    source: null,
+    errorMessage: null,
   });
 
   useEffect(() => {
-    let isMounted = true;
+    let active = true;
 
-    async function resolveUserLocation() {
-      // Snack web preview cannot access real device GPS — use the hardcoded
-      // home address so the map always shows the correct area on web.
+    async function getLocation() {
+      // Expo web cannot access native GPS — show fallback immediately
       if (Platform.OS === "web") {
-        return { ...HOME_LOCATION, _source: "home" };
-      }
-
-      // Native (iOS / Android via Expo Go): use expo-location for real GPS.
-      const locationModule = require("expo-location");
-      const permission = await locationModule.requestForegroundPermissionsAsync();
-      if (permission.status !== "granted") {
-        throw new Error("Location permission was denied.");
-      }
-      const fix = await locationModule.getCurrentPositionAsync({
-        accuracy: locationModule.Accuracy.High,
-      });
-      return {
-        latitude: fix.coords.latitude,
-        longitude: fix.coords.longitude,
-        _source: "gps",
-      };
-    }
-
-    async function loadCurrentLocation() {
-      let gpsFailed = false;
-      let userLocation;
-
-      try {
-        userLocation = await resolveUserLocation();
-      } catch {
-        gpsFailed = true;
-        userLocation = HOME_LOCATION;
-      }
-
-      try {
-        if (!isMounted) {
-          return;
+        if (active) {
+          setState({
+            status: "ready",
+            userLocation: FALLBACK_LOCATION,
+            source: "fallback",
+            errorMessage: null,
+          });
         }
+        return;
+      }
 
-        const source = gpsFailed || userLocation._source === "home"
-          ? "home address · 8855 Framewood Dr, Newburgh IN (open in Expo Go for live GPS)"
-          : "live GPS";
-        const restaurants = buildNearbyRestaurants(userLocation);
-
-        setLocationState({
-          status: "ready",
-          message: `Nearest restaurant found · ${source}`,
-          userLocation,
-          restaurants,
-          nearestRestaurant: findNearestRestaurant(userLocation, restaurants),
+      try {
+        const Location = require("expo-location");
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          throw new Error("Location permission was denied.");
+        }
+        const fix = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
         });
+        if (active) {
+          setState({
+            status: "ready",
+            userLocation: {
+              latitude: fix.coords.latitude,
+              longitude: fix.coords.longitude,
+            },
+            source: "gps",
+            errorMessage: null,
+          });
+        }
       } catch (err) {
-        if (!isMounted) {
-          return;
+        if (active) {
+          setState({
+            status: "ready",
+            userLocation: FALLBACK_LOCATION,
+            source: "fallback",
+            errorMessage: err.message,
+          });
         }
-
-        setLocationState({
-          status: "error",
-          message:
-            "Could not access your location. " +
-            (err?.message ?? "Please allow location access and try again."),
-          userLocation: null,
-          restaurants: [],
-          nearestRestaurant: null,
-        });
       }
     }
 
-    loadCurrentLocation();
-
+    getLocation();
     return () => {
-      isMounted = false;
+      active = false;
     };
   }, []);
 
-  const { message, nearestRestaurant, status, userLocation } = locationState;
-  const mapIsAvailable = Boolean(MapViewComponent && PolylineComponent && MarkerComponent) && Platform.OS !== "web";
-  const routeCoordinates =
-    userLocation && nearestRestaurant
-      ? createRouteCoordinates(userLocation, nearestRestaurant)
-      : [];
-  const region = userLocation
+  const { status, userLocation, source, errorMessage } = state;
+
+  const mapRegion = userLocation
     ? {
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
       }
-    : INITIAL_REGION;
+    : null;
+
+  const mapReady =
+    status === "ready" &&
+    userLocation !== null &&
+    MapView !== null &&
+    Marker !== null;
 
   return (
-    <View style={[
-      styles.container,
-      Platform.OS === "web" && { paddingTop: 0 }
-    ]}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} scrollEnabled={true}>
-        <View style={styles.headerCard}>
-        <Text style={styles.eyebrow}>Native Geolocation Demo</Text>
-        <Text style={styles.title}>Nearest Restaurant Finder</Text>
-        <Text style={styles.description}>{message}</Text>
-
-        {nearestRestaurant ? (
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Closest destination</Text>
-            <Text style={styles.summaryName}>{nearestRestaurant.name}</Text>
-            <Text style={styles.summaryMeta}>{nearestRestaurant.cuisine}</Text>
-            <Text style={styles.summaryDistance}>
-              {nearestRestaurant.distanceKm.toFixed(2)} km away
-            </Text>
-          </View>
-        ) : null}
-
-        {userLocation ? (
-          <Text style={styles.coordinates}>
-            Your position: {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
-          </Text>
-        ) : null}
-
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Nearby Restaurant Finder</Text>
         {status === "loading" ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color="#a3412b" />
-            <Text style={styles.loadingText}>Locating device...</Text>
+          <View style={styles.row}>
+            <ActivityIndicator size="small" color="#2563eb" />
+            <Text style={styles.subtitle}> Acquiring location…</Text>
           </View>
+        ) : (
+          <Text style={styles.subtitle}>
+            {source === "gps"
+              ? `Live GPS · ${userLocation.latitude.toFixed(5)}, ${userLocation.longitude.toFixed(5)}`
+              : "Fallback location – Newburgh, IN (run in Expo Go for live GPS)"}
+          </Text>
+        )}
+        {errorMessage ? (
+          <Text style={styles.error}>{errorMessage}</Text>
         ) : null}
       </View>
 
-      {mapIsAvailable && userLocation && nearestRestaurant ? (
-        <MapViewComponent
-          style={styles.mapView}
-          showsPointsOfInterest={false}
-          showsUserLocation
-          region={region}
-        >
-          <MarkerComponent
+      {/* Map with markers */}
+      {mapReady ? (
+        <MapView style={styles.map} region={mapRegion} showsUserLocation>
+          {/* Current user position */}
+          <Marker
             coordinate={userLocation}
             title="You are here"
-            description="Current GPS position"
-            pinColor="#1b6b75"
+            description="Your current location"
+            pinColor="blue"
           />
-          <MarkerComponent
-            coordinate={{
-              latitude: nearestRestaurant.latitude,
-              longitude: nearestRestaurant.longitude,
-            }}
-            title={nearestRestaurant.name}
-            description={nearestRestaurant.cuisine}
-            pinColor="#c7512c"
-          />
-          <PolylineComponent
-            coordinates={routeCoordinates}
-            strokeColor="#c7512c"
-            strokeWidth={5}
-          />
-        </MapViewComponent>
-      ) : Platform.OS === "web" ? (
-        <WebMapPreview userLocation={userLocation} nearestRestaurant={nearestRestaurant} />
-      ) : (
-        <View style={styles.fallbackPanel}>
-          <Text style={styles.fallbackTitle}>Map preview unavailable.</Text>
-          <Text style={styles.fallbackBody}>{message}</Text>
-          {nearestRestaurant ? (
-            <View style={styles.coordinateList}>
-              <Text style={styles.coordinateItem}>Restaurant: {nearestRestaurant.name}</Text>
-              <Text style={styles.coordinateItem}>Cuisine: {nearestRestaurant.cuisine}</Text>
-              <Text style={styles.coordinateItem}>
-                Coordinates: {nearestRestaurant.latitude.toFixed(5)}, {nearestRestaurant.longitude.toFixed(5)}
-              </Text>
-              <Text style={styles.coordinateItem}>
-                Distance: {nearestRestaurant.distanceKm.toFixed(2)} km
-              </Text>
-            </View>
-          ) : null}
+
+          {/* Nearby restaurant — point of interest annotation */}
+          <Marker
+            coordinate={NEARBY_RESTAURANT}
+            title={NEARBY_RESTAURANT.name}
+            description={`${NEARBY_RESTAURANT.cuisine} · ${NEARBY_RESTAURANT.address}`}
+            pinColor="red"
+          >
+            {Callout ? (
+              <Callout>
+                <View style={styles.callout}>
+                  <Text style={styles.calloutTitle}>{NEARBY_RESTAURANT.name}</Text>
+                  <Text style={styles.calloutBody}>{NEARBY_RESTAURANT.cuisine}</Text>
+                  <Text style={styles.calloutBody}>{NEARBY_RESTAURANT.address}</Text>
+                </View>
+              </Callout>
+            ) : null}
+          </Marker>
+        </MapView>
+      ) : status === "ready" ? (
+        /* Text fallback for web / missing maps package */
+        <View style={styles.fallback}>
+          <Text style={styles.fallbackTitle}>Interactive map unavailable</Text>
+          <Text style={styles.fallbackBody}>
+            Open this project in Expo Go on a physical device to see the live
+            map with GPS tracking.
+          </Text>
+          <View style={styles.poiCard}>
+            <Text style={styles.poiLabel}>📍 Your location</Text>
+            <Text style={styles.poiValue}>
+              {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
+            </Text>
+          </View>
+          <View style={styles.poiCard}>
+            <Text style={styles.poiLabel}>🍽 Nearby restaurant</Text>
+            <Text style={styles.poiName}>{NEARBY_RESTAURANT.name}</Text>
+            <Text style={styles.poiValue}>{NEARBY_RESTAURANT.cuisine}</Text>
+            <Text style={styles.poiValue}>{NEARBY_RESTAURANT.address}</Text>
+          </View>
         </View>
-      )}
-      </ScrollView>
+      ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+  },
+  header: {
+    padding: 16,
+    paddingTop: Platform.OS === "android" ? 40 : 16,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#d1d5db",
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: "#6b7280",
+  },
+  error: {
+    fontSize: 13,
+    color: "#dc2626",
+    marginTop: 4,
+  },
+  map: {
+    flex: 1,
+  },
+  callout: {
+    minWidth: 180,
+    padding: 8,
+  },
+  calloutTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  calloutBody: {
+    fontSize: 13,
+    color: "#6b7280",
+  },
+  fallback: {
+    flex: 1,
+    padding: 24,
+    gap: 16,
+  },
+  fallbackTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  fallbackBody: {
+    fontSize: 15,
+    color: "#6b7280",
+    lineHeight: 22,
+  },
+  poiCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  poiLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    color: "#9ca3af",
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  poiName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  poiValue: {
+    fontSize: 14,
+    color: "#6b7280",
+  },
+});
